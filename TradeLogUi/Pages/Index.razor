@@ -1,0 +1,177 @@
+﻿@page "/"
+@using TradeLogUi.Dto
+@using Newtonsoft.Json
+@using TradeLog
+@using Grpc.Core.Utils
+@using YamlConverter
+@inject TradeLogGrpcService.TradeLogGrpcServiceClient TradeLog
+<style type="text/css">
+    .mud-table-head .header-centered th {
+        text-align: center;
+        font-size: 1.2em;
+    }
+
+   .mud-table-foot .bold-text .mud-table-cell {
+       font-weight: 500;
+   }
+</style>
+
+<MudCardContent Class="pa-0">
+    <MudSimpleTable Hover="true" Bordered="true" Striped="false" Style="overflow-x: auto;">
+                      
+                            <tbody>
+                            <tr>
+                               
+                                <th>
+                                    <MudTextField @bind-Value="_query.TraderId" Label="TraderId" T="string" Variant="Variant.Outlined"></MudTextField>
+                                </th>
+                                <th>
+                                    <MudTextField @bind-Value="_query.AccountId" Label="AccountId" T="string" Variant="Variant.Outlined"></MudTextField>
+                                </th>
+                                <th>
+                                    <MudTextField @bind-Value="_query.ProcessId" Label="ProcessId" T="string" Variant="Variant.Outlined"></MudTextField>
+                                </th>
+                                
+                                <th>
+                                    <MudTextField @bind-Value="_query.OperationId" Label="OperationId" T="string" Variant="Variant.Outlined"></MudTextField>
+                                </th>
+                                
+                                     <th>
+                                                                    <MudTextField @bind-Value="_query.Component" Label="Component" T="string" Variant="Variant.Outlined"></MudTextField>
+                                                                </th>
+                                
+                                <th>
+                                        <MudDateRangePicker  Label="Date Range" @bind-DateRange="_query.DateRange" />
+                                </th>
+                                
+                                <th>
+                                    <MudButton Variant="Variant.Outlined" OnClick="Query" Color="Color.Success">Query</MudButton>
+                                    <MudButton Variant="Variant.Outlined" OnClick="@(() => DataLimitSwithc = !DataLimitSwithc)" Color="Color.Warning">DATA LIMIT</MudButton>
+                                </th>
+                            </tr >
+                            </tbody>
+                        </MudSimpleTable>
+</MudCardContent>
+
+<MudTable Items="@Logs" Hover="true" Breakpoint="Breakpoint.Sm" Striped="true" Bordered="true"
+          CustomHeader="true" CustomFooter="true" HeaderClass="table-head-bordered" FooterClass="table-foot-bordered">
+
+    <HeaderContent>
+        <MudTHeadRow IgnoreCheckbox="true" Class="header-centered">
+            <MudTh colspan="8">Trade Log</MudTh>
+        </MudTHeadRow>
+        <MudTHeadRow Class="header-centered">
+            <MudTh colspan="2">Client info</MudTh>
+            <MudTh colspan="5">Process info</MudTh>
+            <MudTh colspan="1">Actions</MudTh>
+        </MudTHeadRow>
+        <MudTHeadRow>
+            <MudTh>#</MudTh>
+            <MudTh>TraderId</MudTh>
+            <MudTh>AccountId</MudTh>
+            <MudTh>Message</MudTh>
+            <MudTh>Component</MudTh>
+            <MudTh>ProcessId</MudTh>
+            <MudTh>OperationId</MudTh>
+            <MudTh>Date</MudTh>
+            <MudTh>Actions</MudTh>
+        </MudTHeadRow>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Nr">@Count()</MudTd>
+        <MudTd DataLabel="Nr">@context.Value.TraderId</MudTd>
+        <MudTd DataLabel="Sign">@context.Value.AccountId</MudTd>
+        <MudTd DataLabel="Molar mass">@context.Value.Message</MudTd>
+        <MudTd DataLabel="Sign">@context.Value.Component</MudTd>
+        <MudTd DataLabel="Name">@context.Value.ProcessId</MudTd>
+        <MudTd DataLabel="Name">@context.Value.OperationId</MudTd>
+        <MudTd DataLabel="Molar mass">@context.Value.Date.ToUniversalTime()</MudTd>
+        <MudTd DataLabel="Molar mass">
+            <MudButton Variant="Variant.Filled" OnClick="() => HandleUpdateShowData(context.Key)">Data</MudButton>
+        </MudTd>
+    </RowTemplate>
+    <ChildRowContent>
+        <MudTr>
+            <td colspan="8">
+
+                @if (context.Value.ShowDetails)
+                {
+                    if (context.Value.Data.Count == 0)
+                    {
+                        <MudGrid Class="d-flex justify-center">
+                            <MudItem>
+                                <h1>No data to display</h1>
+                            </MudItem>
+                        </MudGrid>
+                        
+                    }
+                    else
+                    {
+                        <MudSimpleTable Hover="true" Bordered="true" Striped="false" Style="overflow-x: auto;">
+                            <thead>
+                            <tr>
+                                @foreach (var dataKey in context.Value.Data.Keys)
+                                {
+                                    <th>@dataKey</th>
+                                }
+                            </tr>
+                            </thead>
+                            <tbody>
+
+                            <tr>
+                                @foreach (var row in context.Value.Data.Values)
+                                {
+                                    var (len, txt) = FormatJsonString(row);
+                                    <th>
+                                        <MudTextField T="string" Label="" Lines="@(len + 1)" Variant="Variant.Outlined" Text="@txt"/>
+                                    </th>
+                                }
+                            </tr >
+                            </tbody>
+                        </MudSimpleTable>
+                    }
+                }
+            </td>
+        </MudTr>
+    </ChildRowContent>
+</MudTable>
+
+@code
+{
+    private bool DataLimitSwithc = true;
+    private int CountRows = 1;
+    public Dictionary<string, TradeLogModel> Logs = new ();
+    private readonly TradeLogQuery _query = TradeLogQuery.CreateDefault();
+
+    public async Task Query()
+    {
+        Logs = (await TradeLog.Query(_query.ToGrpc()).ResponseStream.ToListAsync()).Select(itm => new TradeLogModel(itm, DataLimitSwithc))
+            .ToDictionary(itm => itm.Id, itm => itm);
+    }
+
+    private void HandleUpdateShowData(string src)
+    {
+        Logs[src].ShowDetails = !Logs[src].ShowDetails; 
+        StateHasChanged();
+    }
+
+
+    private (int, string) FormatJsonString(string src)
+    {
+        var json = JsonConvert.DeserializeObject(src);
+        var obj = YamlConvert.SerializeObject(json);
+
+        if (obj != null && DataLimitSwithc && obj.Length > 300)
+        {
+            obj = obj.Substring(0, 300);
+            obj = $"{obj}...";
+        }
+        
+        return (obj.Count(itm => itm.Equals('\n')), obj);
+    }
+
+    private int Count()
+    {
+        return CountRows++;
+    }
+}
